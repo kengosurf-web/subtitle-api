@@ -15,7 +15,7 @@ const cache = new Map();
 
 /* --------------------------------------------------
    ② PNG を返す URL エンドポイント
-      http://127.0.0.1:3000/image/<id>
+      /image/<id>
 -------------------------------------------------- */
 app.get("/image/:id", (req, res) => {
   const id = req.params.id;
@@ -79,10 +79,12 @@ app.post("/multi", async (req, res) => {
       const id = `${Date.now()}-${Math.random()}`;
       cache.set(id, pngBuffer);
 
-      // URL を返す
+      // Render でもローカルでも動く URL
+      const url = `${req.protocol}://${req.get("host")}/image/${id}`;
+
       results.push({
         id: item.seconds,
-        url: `http://127.0.0.1:3000/image/${id}`
+        url
       });
     }
 
@@ -120,8 +122,9 @@ async function createSubtitlePng(text) {
 }
 
 /* --------------------------------------------------
-   ⑥ サーバー起動
+   ⑥ サーバー起動（Render 対応）
 -------------------------------------------------- */
-app.listen(3000, "0.0.0.0", () => {
-  console.log("ローカル字幕PNG API 起動: http://127.0.0.1:3000");
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`Server running on port ${PORT}`);
 });
