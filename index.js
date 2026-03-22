@@ -97,28 +97,73 @@ app.post("/multi", async (req, res) => {
 });
 
 /* --------------------------------------------------
-   ⑤ PNG生成関数（複数字幕用）
+   ⑤ PNG生成関数（折り返し＋自動リサイズ対応版）
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
-  const width = 1080;
-  const height = 250;
+  const maxWidth = 900;        // 折り返しの最大幅
+  let fontSize = 64;           // 初期フォントサイズ
+  const lineHeightRate = 1.3;  // 行間
 
-  const canvas = createCanvas(width, height);
-  const ctx = canvas.getContext("2d");
+  // 仮キャンバス
+  let canvas = createCanvas(1200, 400);
+  let ctx = canvas.getContext("2d");
 
-  ctx.clearRect(0, 0, width, height);
+  ctx.font = `${fontSize}px NotoSansJP`;
 
-  ctx.font = "64px NotoSansJP";
+  // --- 折り返し関数 ---
+  const wrapText = (ctx, text, maxWidth) => {
+    const chars = text.split("");
+    let line = "";
+    let lines = [];
+
+    for (let c of chars) {
+      const test = line + c;
+      if (ctx.measureText(test).width > maxWidth) {
+        lines.push(line);
+        line = c;
+      } else {
+        line = test;
+      }
+    }
+    lines.push(line);
+    return lines;
+  };
+
+  // 1回目の折り返し
+  let lines = wrapText(ctx, text, maxWidth);
+
+  // 最大行幅を測る
+  let maxLineWidth = Math.max(
+    ...lines.map((l) => ctx.measureText(l).width)
+  );
+
+  // --- 自動リサイズ ---
+  const scale = maxWidth / maxLineWidth;
+  const finalFontSize = fontSize * scale;
+
+  // フォントサイズを更新して再描画
+  canvas = createCanvas(1200, 400);
+  ctx = canvas.getContext("2d");
+  ctx.font = `${finalFontSize}px NotoSansJP`;
   ctx.fillStyle = "white";
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
 
-  ctx.fillText(text, width / 2, height / 2);
+  // 2回目の折り返し
+  lines = wrapText(ctx, text, maxWidth);
 
+  // 描画
+  let y = finalFontSize;
+  for (let line of lines) {
+    ctx.fillText(line, 0, y);
+    y += finalFontSize * lineHeightRate;
+  }
+
+  // PNG バッファ
   const buffer = canvas.toBuffer("image/png");
-  const optimized = await sharp(buffer).png().toBuffer();
 
-  return optimized;
+  // Sharp で余白を自動トリム
+  const trimmed = await sharp(buffer).trim().toBuffer();
+
+  return trimmed;
 }
 
 /* --------------------------------------------------
