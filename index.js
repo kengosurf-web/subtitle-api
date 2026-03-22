@@ -7,6 +7,7 @@ app.use(express.json());
 
 // 日本語フォント
 registerFont("./fonts/NotoSansJP-Regular.ttf", { family: "NotoSansJP" });
+registerFont("./fonts/NotoSansJP-Bold.ttf", { family: "NotoSansJP", weight: "700" });
 
 /* --------------------------------------------------
    メモリキャッシュ
@@ -59,30 +60,31 @@ app.post("/multi", async (req, res) => {
 });
 
 /* --------------------------------------------------
-   強制分割方式 createSubtitlePng（本体）
+   createSubtitlePng（強化版）
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
   const canvasWidth = 1080;
   const maxWidth = 900;
-  const offsetX = (canvasWidth - maxWidth) / 2; // 90px
-  const baseFontSize = 64;
-  const lineHeightRate = 1.3;
+  const baseFontSize = 128;        // ★ フォントサイズ倍
+  const lineHeightRate = 1.5;      // ★ 行間広め
+  const maxLines = 5;              // ★ 最大5行まで許容
 
   // 仮キャンバスで幅を測る
-  let canvas = createCanvas(canvasWidth, 400);
+  let canvas = createCanvas(canvasWidth, 800);
   let ctx = canvas.getContext("2d");
-  ctx.font = `${baseFontSize}px NotoSansJP`;
+  ctx.font = `700 ${baseFontSize}px NotoSansJP`;
 
   // 全体幅
   const totalWidth = ctx.measureText(text).width;
 
-  // 🎯 行数 = ceil(totalWidth / 450)
-  const lineCount = Math.max(1, Math.ceil(totalWidth / 450));
+  // 行数（最大5行）
+  let lineCount = Math.ceil(totalWidth / 450);
+  lineCount = Math.min(lineCount, maxLines);
 
-  // 🎯 均等割りの文字数
+  // 均等割り文字数
   const charsPerLine = Math.ceil(text.length / lineCount);
 
-  // 🎯 自然な区切りを探す
+  // 自然な区切り
   const findNaturalBreak = (str, targetIndex) => {
     const candidates = [
       "。", "、", "，", "！", "？", "」", "）",
@@ -103,7 +105,7 @@ async function createSubtitlePng(text) {
     return bestIndex;
   };
 
-  // 🎯 行ごとに分割
+  // 行分割
   let lines = [];
   let remaining = text;
 
@@ -115,18 +117,25 @@ async function createSubtitlePng(text) {
   }
   lines.push(remaining);
 
-  // 🎯 再描画キャンバス
-  canvas = createCanvas(canvasWidth, 400);
+  // 再描画キャンバス
+  canvas = createCanvas(canvasWidth, 800);
   ctx = canvas.getContext("2d");
-  ctx.font = `${baseFontSize}px NotoSansJP`;
-  ctx.fillStyle = "white";
-  ctx.textAlign = "left";
+  ctx.font = `700 ${baseFontSize}px NotoSansJP`;
+  ctx.textAlign = "center";
   ctx.textBaseline = "top";
 
-  // 🎯 描画
+  // ★ 縁取り（黒）
+  ctx.lineWidth = baseFontSize * 0.12;
+  ctx.strokeStyle = "black";
+
+  // ★ 本文（白）
+  ctx.fillStyle = "white";
+
+  // 描画
   let y = 0;
   for (const line of lines) {
-    ctx.fillText(line, offsetX, y);
+    ctx.strokeText(line, canvasWidth / 2, y); // 縁取り
+    ctx.fillText(line, canvasWidth / 2, y);   // 本文
     y += baseFontSize * lineHeightRate;
   }
 
