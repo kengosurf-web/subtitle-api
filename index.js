@@ -1,13 +1,11 @@
 import express from "express";
-import sharp from "sharp";
 import { createCanvas, registerFont } from "canvas";
 
 const app = express();
 app.use(express.json());
 
-// 日本語フォント
+// 日本語フォント（Regular のみ）
 registerFont("./fonts/NotoSansJP-Regular.ttf", { family: "NotoSansJP" });
-registerFont("./fonts/NotoSansJP-Bold.ttf", { family: "NotoSansJP", weight: "700" });
 
 /* --------------------------------------------------
    メモリキャッシュ
@@ -60,11 +58,10 @@ app.post("/multi", async (req, res) => {
 });
 
 /* --------------------------------------------------
-   createSubtitlePng（強化版）
+   createSubtitlePng（今のセットで動く最終形）
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
   const canvasWidth = 1080;
-  const maxWidth = 900;
   const baseFontSize = 128;        // ★ フォントサイズ倍
   const lineHeightRate = 1.5;      // ★ 行間広め
   const maxLines = 5;              // ★ 最大5行まで許容
@@ -72,7 +69,7 @@ async function createSubtitlePng(text) {
   // 仮キャンバスで幅を測る
   let canvas = createCanvas(canvasWidth, 800);
   let ctx = canvas.getContext("2d");
-  ctx.font = `700 ${baseFontSize}px NotoSansJP`;
+  ctx.font = `700 ${baseFontSize}px NotoSansJP`; // ★ Regular.ttf だけで太字風
 
   // 全体幅
   const totalWidth = ctx.measureText(text).width;
@@ -134,8 +131,8 @@ async function createSubtitlePng(text) {
   // 描画
   let y = 0;
   for (const line of lines) {
-    ctx.strokeText(line, canvasWidth / 2, y); // 縁取り
-    ctx.fillText(line, canvasWidth / 2, y);   // 本文
+    ctx.strokeText(line, canvasWidth / 2, y);
+    ctx.fillText(line, canvasWidth / 2, y);
     y += baseFontSize * lineHeightRate;
   }
 
