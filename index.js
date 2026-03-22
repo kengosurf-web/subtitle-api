@@ -100,12 +100,12 @@ app.post("/multi", async (req, res) => {
    ⑤ PNG生成関数（折り返し＋自動リサイズ＋中央揃え対応版）
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
-  const maxWidth = 900;        // 折り返しの最大幅
+  const maxWidth = 900;        // 折り返しの最大幅（画面内）
   let fontSize = 64;           // 初期フォントサイズ
   const lineHeightRate = 1.3;  // 行間
 
-  // 仮キャンバス
-  let canvas = createCanvas(1200, 400);
+  // 仮キャンバス（幅を1080に修正）
+  let canvas = createCanvas(1080, 400);
   let ctx = canvas.getContext("2d");
 
   ctx.font = `${fontSize}px NotoSansJP`;
@@ -139,8 +139,8 @@ async function createSubtitlePng(text) {
   const scale = maxWidth / maxLineWidth;
   const finalFontSize = fontSize * scale;
 
-  // 再描画キャンバス
-  canvas = createCanvas(1200, 400);
+  // 再描画キャンバス（幅1080）
+  canvas = createCanvas(1080, 400);
   ctx = canvas.getContext("2d");
   ctx.font = `${finalFontSize}px NotoSansJP`;
   ctx.fillStyle = "white";
