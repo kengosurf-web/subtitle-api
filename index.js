@@ -97,7 +97,7 @@ app.post("/multi", async (req, res) => {
 });
 
 /* --------------------------------------------------
-   ⑤ PNG生成関数（折り返し＋自動リサイズ対応版）
+   ⑤ PNG生成関数（折り返し＋自動リサイズ＋中央揃え対応版）
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
   const maxWidth = 900;        // 折り返しの最大幅
@@ -110,7 +110,7 @@ async function createSubtitlePng(text) {
 
   ctx.font = `${fontSize}px NotoSansJP`;
 
-  // --- 折り返し関数 ---
+  // --- 折り返し関数（中央揃え対応） ---
   const wrapText = (ctx, text, maxWidth) => {
     const chars = text.split("");
     let line = "";
@@ -132,28 +132,29 @@ async function createSubtitlePng(text) {
   // 1回目の折り返し
   let lines = wrapText(ctx, text, maxWidth);
 
-  // 最大行幅を測る
-  let maxLineWidth = Math.max(
-    ...lines.map((l) => ctx.measureText(l).width)
-  );
+  // 最大行幅
+  let maxLineWidth = Math.max(...lines.map(l => ctx.measureText(l).width));
 
   // --- 自動リサイズ ---
   const scale = maxWidth / maxLineWidth;
   const finalFontSize = fontSize * scale;
 
-  // フォントサイズを更新して再描画
+  // 再描画キャンバス
   canvas = createCanvas(1200, 400);
   ctx = canvas.getContext("2d");
   ctx.font = `${finalFontSize}px NotoSansJP`;
   ctx.fillStyle = "white";
+  ctx.textAlign = "center";   // 中央揃え
+  ctx.textBaseline = "top";
 
   // 2回目の折り返し
   lines = wrapText(ctx, text, maxWidth);
 
-  // 描画
-  let y = finalFontSize;
+  // 描画開始位置
+  let y = 0;
+
   for (let line of lines) {
-    ctx.fillText(line, 0, y);
+    ctx.fillText(line, canvas.width / 2, y);  // 中央に描画
     y += finalFontSize * lineHeightRate;
   }
 
