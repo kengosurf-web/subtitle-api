@@ -5,17 +5,16 @@ import { createCanvas, registerFont } from "canvas";
 const app = express();
 app.use(express.json());
 
-// 日本語フォントを登録
+// 日本語フォント
 registerFont("./fonts/NotoSansJP-Regular.ttf", { family: "NotoSansJP" });
 
 /* --------------------------------------------------
-   ① メモリキャッシュ（PNGバッファを保存）
+   メモリキャッシュ
 -------------------------------------------------- */
 const cache = new Map();
 
 /* --------------------------------------------------
-   ② PNG を返す URL エンドポイント
-      /image/<id>
+   PNG を返すエンドポイント
 -------------------------------------------------- */
 app.get("/image/:id", (req, res) => {
   const id = req.params.id;
@@ -30,56 +29,19 @@ app.get("/image/:id", (req, res) => {
 });
 
 /* --------------------------------------------------
-   ③ 単体テスト用（既存の /test）
--------------------------------------------------- */
-app.post("/test", async (req, res) => {
-  try {
-    const text = req.body.text || "テスト";
-
-    const width = 1080;
-    const height = 250;
-
-    const canvas = createCanvas(width, height);
-    const ctx = canvas.getContext("2d");
-
-    ctx.clearRect(0, 0, width, height);
-
-    ctx.font = "64px NotoSansJP";
-    ctx.fillStyle = "white";
-    ctx.textAlign = "center";
-    ctx.textBaseline = "middle";
-
-    ctx.fillText(text, width / 2, height / 2);
-
-    const buffer = canvas.toBuffer("image/png");
-    const optimized = await sharp(buffer).png().toBuffer();
-
-    res.json({
-      base64: optimized.toString("base64")
-    });
-
-  } catch (e) {
-    console.error(e);
-    res.status(500).json({ error: "PNG生成失敗" });
-  }
-});
-
-/* --------------------------------------------------
-   ④ 複数字幕を PNG 化して URL を返す /multi
+   複数字幕 PNG 生成
 -------------------------------------------------- */
 app.post("/multi", async (req, res) => {
   try {
-    const items = req.body; // n8n からの字幕配列
+    const items = req.body;
     const results = [];
 
     for (const item of items) {
       const pngBuffer = await createSubtitlePng(item.subtitle);
 
-      // キャッシュIDを作成
       const id = `${Date.now()}-${Math.random()}`;
       cache.set(id, pngBuffer);
 
-      // Render でもローカルでも動く URL
       const url = `${req.protocol}://${req.get("host")}/image/${id}`;
 
       results.push({
@@ -97,76 +59,82 @@ app.post("/multi", async (req, res) => {
 });
 
 /* --------------------------------------------------
-   ⑤ PNG生成関数（折り返し＋自動リサイズ＋中央揃え）
+   強制分割方式 createSubtitlePng（本体）
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
-  const canvasWidth = 1080;   // 最終レンダーと同じ幅
-  const maxWidth = 900;       // 折り返し幅
+  const canvasWidth = 1080;
+  const maxWidth = 900;
   const offsetX = (canvasWidth - maxWidth) / 2; // 90px
-  let fontSize = 64;
+  const baseFontSize = 64;
   const lineHeightRate = 1.3;
 
-  // 仮キャンバス
+  // 仮キャンバスで幅を測る
   let canvas = createCanvas(canvasWidth, 400);
   let ctx = canvas.getContext("2d");
+  ctx.font = `${baseFontSize}px NotoSansJP`;
 
-  ctx.font = `${fontSize}px NotoSansJP`;
+  // 全体幅
+  const totalWidth = ctx.measureText(text).width;
 
-  // 折り返し関数
-  const wrapText = (ctx, text, maxWidth) => {
-    const chars = text.split("");
-    let line = "";
-    let lines = [];
+  // 🎯 行数 = ceil(totalWidth / 450)
+  const lineCount = Math.max(1, Math.ceil(totalWidth / 450));
 
-    for (let c of chars) {
-      const test = line + c;
-      if (ctx.measureText(test).width > maxWidth) {
-        lines.push(line);
-        line = c;
-      } else {
-        line = test;
+  // 🎯 均等割りの文字数
+  const charsPerLine = Math.ceil(text.length / lineCount);
+
+  // 🎯 自然な区切りを探す
+  const findNaturalBreak = (str, targetIndex) => {
+    const candidates = [
+      "。", "、", "，", "！", "？", "」", "）",
+      "は", "が", "を", "に", "で", "へ", "と", "も", "から", "まで",
+      " "
+    ];
+
+    const start = Math.max(0, targetIndex - 5);
+    const end = Math.min(str.length, targetIndex + 5);
+
+    let bestIndex = targetIndex;
+
+    for (let i = start; i < end; i++) {
+      if (candidates.includes(str[i])) {
+        bestIndex = i + 1;
       }
     }
-    lines.push(line);
-    return lines;
+    return bestIndex;
   };
 
-  // 1回目の折り返し
-  let lines = wrapText(ctx, text, maxWidth);
+  // 🎯 行ごとに分割
+  let lines = [];
+  let remaining = text;
 
-  // 最大行幅
-  let maxLineWidth = Math.max(...lines.map(l => ctx.measureText(l).width));
+  for (let i = 0; i < lineCount - 1; i++) {
+    const target = charsPerLine;
+    const breakIndex = findNaturalBreak(remaining, target);
+    lines.push(remaining.slice(0, breakIndex));
+    remaining = remaining.slice(breakIndex);
+  }
+  lines.push(remaining);
 
-  // 自動リサイズ
-  const scale = maxWidth / maxLineWidth;
-  const finalFontSize = fontSize * scale;
-
-  // 再描画キャンバス
+  // 🎯 再描画キャンバス
   canvas = createCanvas(canvasWidth, 400);
   ctx = canvas.getContext("2d");
-  ctx.font = `${finalFontSize}px NotoSansJP`;
+  ctx.font = `${baseFontSize}px NotoSansJP`;
   ctx.fillStyle = "white";
   ctx.textAlign = "left";
   ctx.textBaseline = "top";
 
-  // 2回目の折り返し
-  lines = wrapText(ctx, text, maxWidth);
-
-  // 描画
+  // 🎯 描画
   let y = 0;
-  for (let line of lines) {
+  for (const line of lines) {
     ctx.fillText(line, offsetX, y);
-    y += finalFontSize * lineHeightRate;
+    y += baseFontSize * lineHeightRate;
   }
 
-  // PNG バッファ（trimしない）
-  const buffer = canvas.toBuffer("image/png");
-
-  return buffer;
+  return canvas.toBuffer("image/png");
 }
 
 /* --------------------------------------------------
-   ⑥ サーバー起動（Render 対応）
+   サーバー起動
 -------------------------------------------------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
