@@ -97,12 +97,12 @@ app.post("/multi", async (req, res) => {
 });
 
 /* --------------------------------------------------
-   ⑤ PNG生成関数（折り返し枠を中央に揃えた完全版）
+   ⑤ PNG生成関数（折り返し＋自動リサイズ＋中央揃え）
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
-  const canvasWidth = 1080;   // スマホ縦動画の幅
+  const canvasWidth = 1080;   // 最終レンダーと同じ幅
   const maxWidth = 900;       // 折り返し幅
-  const offsetX = (canvasWidth - maxWidth) / 2; // ← 折り返し枠を中央に配置
+  const offsetX = (canvasWidth - maxWidth) / 2; // 90px
   let fontSize = 64;
   const lineHeightRate = 1.3;
 
@@ -112,7 +112,7 @@ async function createSubtitlePng(text) {
 
   ctx.font = `${fontSize}px NotoSansJP`;
 
-  // --- 折り返し関数（中央枠対応） ---
+  // 折り返し関数
   const wrapText = (ctx, text, maxWidth) => {
     const chars = text.split("");
     let line = "";
@@ -137,7 +137,7 @@ async function createSubtitlePng(text) {
   // 最大行幅
   let maxLineWidth = Math.max(...lines.map(l => ctx.measureText(l).width));
 
-  // --- 自動リサイズ ---
+  // 自動リサイズ
   const scale = maxWidth / maxLineWidth;
   const finalFontSize = fontSize * scale;
 
@@ -146,27 +146,23 @@ async function createSubtitlePng(text) {
   ctx = canvas.getContext("2d");
   ctx.font = `${finalFontSize}px NotoSansJP`;
   ctx.fillStyle = "white";
-  ctx.textAlign = "left";     // ← 左揃え（中央枠の左端に合わせる）
+  ctx.textAlign = "left";
   ctx.textBaseline = "top";
 
   // 2回目の折り返し
   lines = wrapText(ctx, text, maxWidth);
 
-  // 描画開始位置
+  // 描画
   let y = 0;
-
   for (let line of lines) {
-    ctx.fillText(line, offsetX, y);  // ← 折り返し枠の左端に描画
+    ctx.fillText(line, offsetX, y);
     y += finalFontSize * lineHeightRate;
   }
 
-  // PNG バッファ
+  // PNG バッファ（trimしない）
   const buffer = canvas.toBuffer("image/png");
 
-  // Sharp で余白を自動トリム
-  const trimmed = await sharp(buffer).trim().toBuffer();
-
-  return trimmed;
+  return buffer;
 }
 
 /* --------------------------------------------------
