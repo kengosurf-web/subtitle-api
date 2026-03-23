@@ -58,24 +58,24 @@ app.post("/multi", async (req, res) => {
 });
 
 /* --------------------------------------------------
-   createSubtitlePng（今のセットで動く最終形）
+   createSubtitlePng（最大7行・幅500対応版）
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
   const canvasWidth = 1080;
-  const baseFontSize = 128;        // ★ フォントサイズ倍
-  const lineHeightRate = 1.5;      // ★ 行間広め
-  const maxLines = 5;              // ★ 最大5行まで許容
+  const baseFontSize = 128;        // フォントサイズ倍
+  const lineHeightRate = 1.5;      // 行間広め
+  const maxLines = 7;              // ★ 最大7行に変更
 
   // 仮キャンバスで幅を測る
   let canvas = createCanvas(canvasWidth, 800);
   let ctx = canvas.getContext("2d");
-  ctx.font = `700 ${baseFontSize}px NotoSansJP`; // ★ Regular.ttf だけで太字風
+  ctx.font = `700 ${baseFontSize}px NotoSansJP`;
 
   // 全体幅
   const totalWidth = ctx.measureText(text).width;
 
-  // 行数（最大5行）
-  let lineCount = Math.ceil(totalWidth / 450);
+  // 行数（最大7行）
+  let lineCount = Math.ceil(totalWidth / 500);  // ★ 450 → 500 に変更
   lineCount = Math.min(lineCount, maxLines);
 
   // 均等割り文字数
@@ -121,11 +121,11 @@ async function createSubtitlePng(text) {
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
 
-  // ★ 縁取り（黒）
+  // 縁取り（黒）
   ctx.lineWidth = baseFontSize * 0.12;
   ctx.strokeStyle = "black";
 
-  // ★ 本文（白）
+  // 本文（白）
   ctx.fillStyle = "white";
 
   // 描画
