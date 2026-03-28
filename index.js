@@ -65,7 +65,7 @@ async function createSubtitlePng(text) {
   const baseFontSize = 128;        // フォントサイズ
   const lineHeightRate = 1.5;      // 行間
   const maxLines = 7;              // 最大行数
-  const maxWidth = 500;            // ★ 折り返し幅（絶対に超えない）
+  const maxWidth = 1000;            // ★ 折り返し幅（絶対に超えない）
 
   // 仮キャンバスで幅を測る
   let canvas = createCanvas(canvasWidth, 800);
