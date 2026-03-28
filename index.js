@@ -58,63 +58,47 @@ app.post("/multi", async (req, res) => {
 });
 
 /* --------------------------------------------------
-   createSubtitlePng（最大7行・幅500対応版）
+   createSubtitlePng（幅ベース折り返し・最大7行）
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
   const canvasWidth = 1080;
-  const baseFontSize = 128;        // フォントサイズ倍
-  const lineHeightRate = 1.5;      // 行間広め
-  const maxLines = 7;              // ★ 最大7行に変更
+  const baseFontSize = 128;        // フォントサイズ
+  const lineHeightRate = 1.5;      // 行間
+  const maxLines = 7;              // 最大行数
+  const maxWidth = 500;            // ★ 折り返し幅（絶対に超えない）
 
   // 仮キャンバスで幅を測る
   let canvas = createCanvas(canvasWidth, 800);
   let ctx = canvas.getContext("2d");
   ctx.font = `700 ${baseFontSize}px NotoSansJP`;
 
-  // 全体幅
-  const totalWidth = ctx.measureText(text).width;
+  /* --------------------------------------------------
+     幅ベース折り返し（絶対に切れない）
+  -------------------------------------------------- */
+  const lines = [];
+  let current = "";
 
-  // 行数（最大7行）
-  let lineCount = Math.ceil(totalWidth / 500);  // ★ 450 → 500 に変更
-  lineCount = Math.min(lineCount, maxLines);
+  for (const char of text) {
+    const test = current + char;
+    const width = ctx.measureText(test).width;
 
-  // 均等割り文字数
-  const charsPerLine = Math.ceil(text.length / lineCount);
+    if (width > maxWidth) {
+      lines.push(current);
+      current = char;
 
-  // 自然な区切り
-  const findNaturalBreak = (str, targetIndex) => {
-    const candidates = [
-      "。", "、", "，", "！", "？", "」", "）",
-      "は", "が", "を", "に", "で", "へ", "と", "も", "から", "まで",
-      " "
-    ];
-
-    const start = Math.max(0, targetIndex - 5);
-    const end = Math.min(str.length, targetIndex + 5);
-
-    let bestIndex = targetIndex;
-
-    for (let i = start; i < end; i++) {
-      if (candidates.includes(str[i])) {
-        bestIndex = i + 1;
-      }
+      if (lines.length >= maxLines) break;
+    } else {
+      current = test;
     }
-    return bestIndex;
-  };
-
-  // 行分割
-  let lines = [];
-  let remaining = text;
-
-  for (let i = 0; i < lineCount - 1; i++) {
-    const target = charsPerLine;
-    const breakIndex = findNaturalBreak(remaining, target);
-    lines.push(remaining.slice(0, breakIndex));
-    remaining = remaining.slice(breakIndex);
   }
-  lines.push(remaining);
 
-  // 再描画キャンバス
+  if (current && lines.length < maxLines) {
+    lines.push(current);
+  }
+
+  /* --------------------------------------------------
+     描画キャンバス
+  -------------------------------------------------- */
   canvas = createCanvas(canvasWidth, 800);
   ctx = canvas.getContext("2d");
   ctx.font = `700 ${baseFontSize}px NotoSansJP`;
