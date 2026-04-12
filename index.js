@@ -28,7 +28,7 @@ app.get("/image/:id", (req, res) => {
 });
 
 /* --------------------------------------------------
-   複数字幕 PNG 生成
+   複数字幕 PNG 生成（軽量版）
 -------------------------------------------------- */
 app.post("/multi", async (req, res) => {
   try {
@@ -58,23 +58,20 @@ app.post("/multi", async (req, res) => {
 });
 
 /* --------------------------------------------------
-   createSubtitlePng（幅ベース折り返し・最大7行）
+   createSubtitlePng（軽量版・最終サイズで生成）
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
-  const canvasWidth = 1080;
-  const baseFontSize = 128;        // フォントサイズ
-  const lineHeightRate = 1.5;      // 行間
-  const maxLines = 7;              // 最大行数
-  const maxWidth = 1000;            // ★ 折り返し幅（絶対に超えない）
+  const canvasWidth = 540;          // ★ 最終サイズ（1080 の 0.5）
+  const baseFontSize = 64;          // ★ 最終フォントサイズ（128 の 0.5）
+  const lineHeightRate = 1.35;      // ★ 行間も最適化
+  const maxLines = 7;
+  const maxWidth = 500;             // ★ 折り返し幅も最終サイズに合わせる
 
   // 仮キャンバスで幅を測る
-  let canvas = createCanvas(canvasWidth, 800);
+  let canvas = createCanvas(canvasWidth, 600);
   let ctx = canvas.getContext("2d");
   ctx.font = `700 ${baseFontSize}px NotoSansJP`;
 
-  /* --------------------------------------------------
-     幅ベース折り返し（絶対に切れない）
-  -------------------------------------------------- */
   const lines = [];
   let current = "";
 
@@ -85,7 +82,6 @@ async function createSubtitlePng(text) {
     if (width > maxWidth) {
       lines.push(current);
       current = char;
-
       if (lines.length >= maxLines) break;
     } else {
       current = test;
@@ -97,9 +93,9 @@ async function createSubtitlePng(text) {
   }
 
   /* --------------------------------------------------
-     描画キャンバス
+     描画キャンバス（最終サイズ）
   -------------------------------------------------- */
-  canvas = createCanvas(canvasWidth, 800);
+  canvas = createCanvas(canvasWidth, 600);
   ctx = canvas.getContext("2d");
   ctx.font = `700 ${baseFontSize}px NotoSansJP`;
   ctx.textAlign = "center";
