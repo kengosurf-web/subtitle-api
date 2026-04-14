@@ -13,7 +13,7 @@ registerFont("./fonts/NotoSansJP-Regular.ttf", { family: "NotoSansJP" });
 const cache = new Map();
 
 /* --------------------------------------------------
-   WebP を返すエンドポイント
+   PNG を返すエンドポイント
 -------------------------------------------------- */
 app.get("/image/:id", (req, res) => {
   const id = req.params.id;
@@ -23,12 +23,12 @@ app.get("/image/:id", (req, res) => {
     return res.status(404).send("Not found");
   }
 
-  res.set("Content-Type", "image/webp");
+  res.set("Content-Type", "image/png");
   res.send(buffer);
 });
 
 /* --------------------------------------------------
-   複数字幕 WebP 生成（軽量版）
+   複数字幕 PNG 生成（軽量版）
 -------------------------------------------------- */
 app.post("/multi", async (req, res) => {
   try {
@@ -36,10 +36,10 @@ app.post("/multi", async (req, res) => {
     const results = [];
 
     for (const item of items) {
-      const webpBuffer = await createSubtitleWebp(item.subtitle);
+      const pngBuffer = await createSubtitlePng(item.subtitle);
 
       const id = `${Date.now()}-${Math.random()}`;
-      cache.set(id, webpBuffer);
+      cache.set(id, pngBuffer);
 
       const url = `${req.protocol}://${req.get("host")}/image/${id}`;
 
@@ -53,19 +53,19 @@ app.post("/multi", async (req, res) => {
 
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: "複数字幕WebP生成失敗" });
+    res.status(500).json({ error: "複数字幕PNG生成失敗" });
   }
 });
 
 /* --------------------------------------------------
-   createSubtitleWebp（軽量版・最終サイズで生成）
+   createSubtitlePng（軽量版・最終サイズで生成）
 -------------------------------------------------- */
-async function createSubtitleWebp(text) {
-  const canvasWidth = 540;
-  const baseFontSize = 64;
-  const lineHeightRate = 1.35;
+async function createSubtitlePng(text) {
+  const canvasWidth = 540;          
+  const baseFontSize = 64;          
+  const lineHeightRate = 1.35;      
   const maxLines = 7;
-  const maxWidth = 500;
+  const maxWidth = 500;             
 
   // 仮キャンバスで幅を測る
   let canvas = createCanvas(canvasWidth, 600);
@@ -99,10 +99,14 @@ async function createSubtitleWebp(text) {
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
 
+  // 縁取り（黒）
   ctx.lineWidth = baseFontSize * 0.12;
   ctx.strokeStyle = "black";
+
+  // 本文（白）
   ctx.fillStyle = "white";
 
+  // 描画
   let y = 0;
   for (const line of lines) {
     ctx.strokeText(line, canvasWidth / 2, y);
@@ -110,7 +114,7 @@ async function createSubtitleWebp(text) {
     y += baseFontSize * lineHeightRate;
   }
 
-  return canvas.toBuffer("image/webp");
+  return canvas.toBuffer("image/png");
 }
 
 /* --------------------------------------------------
