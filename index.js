@@ -58,20 +58,27 @@ app.post("/multi", async (req, res) => {
 });
 
 /* --------------------------------------------------
-   createSubtitlePng（軽量版・最終サイズで生成）
+   createSubtitlePng（新仕様）
+   - キャンバス幅 1080
+   - テキストブロック幅 540
+   - 下寄せ中央揃え
+   - 最終行が短い場合は前行に吸収
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
-  const canvasWidth = 540;          
-  const baseFontSize = 64;          
-  const lineHeightRate = 1.35;      
+  const canvasWidth = 1080;        // ★ 画面幅と同じ
+  const textBlockWidth = 540;      // ★ 折り返し基準
+  const baseFontSize = 64;
+  const lineHeightRate = 1.35;
   const maxLines = 7;
-  const maxWidth = 500;             
 
   // 仮キャンバスで幅を測る
-  let canvas = createCanvas(canvasWidth, 600);
+  let canvas = createCanvas(canvasWidth, 2000);
   let ctx = canvas.getContext("2d");
   ctx.font = `700 ${baseFontSize}px NotoSansJP`;
 
+  // ------------------------------
+  // 1. 通常の折り返し（540px）
+  // ------------------------------
   const lines = [];
   let current = "";
 
@@ -79,7 +86,7 @@ async function createSubtitlePng(text) {
     const test = current + char;
     const width = ctx.measureText(test).width;
 
-    if (width > maxWidth) {
+    if (width > textBlockWidth) {
       lines.push(current);
       current = char;
       if (lines.length >= maxLines) break;
@@ -92,12 +99,35 @@ async function createSubtitlePng(text) {
     lines.push(current);
   }
 
-  // 描画キャンバス
-  canvas = createCanvas(canvasWidth, 600);
+  // ------------------------------
+  // 2. 最終行が短すぎる場合は前行に吸収
+  // ------------------------------
+  if (lines.length >= 2) {
+    const last = lines[lines.length - 1];
+    if (last.length < 5) {
+      lines[lines.length - 2] += last;
+      lines.pop();
+    }
+  }
+
+  // ------------------------------
+  // 3. キャンバス高さを行数に合わせて決定
+  // ------------------------------
+  const lineHeight = baseFontSize * lineHeightRate;
+  const textHeight = lines.length * lineHeight;
+  const bottomMargin = 120; // 下部余白
+  const canvasHeight = textHeight + bottomMargin;
+
+  canvas = createCanvas(canvasWidth, canvasHeight);
   ctx = canvas.getContext("2d");
   ctx.font = `700 ${baseFontSize}px NotoSansJP`;
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
+
+  // ------------------------------
+  // 4. 描画開始位置（下寄せ）
+  // ------------------------------
+  let y = canvasHeight - textHeight - bottomMargin + 20;
 
   // 縁取り（黒）
   ctx.lineWidth = baseFontSize * 0.12;
@@ -107,11 +137,10 @@ async function createSubtitlePng(text) {
   ctx.fillStyle = "white";
 
   // 描画
-  let y = 0;
   for (const line of lines) {
     ctx.strokeText(line, canvasWidth / 2, y);
     ctx.fillText(line, canvasWidth / 2, y);
-    y += baseFontSize * lineHeightRate;
+    y += lineHeight;
   }
 
   return canvas.toBuffer("image/png");
@@ -124,3 +153,4 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
+
