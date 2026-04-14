@@ -4,7 +4,7 @@ import { createCanvas, registerFont } from "canvas";
 const app = express();
 app.use(express.json());
 
-// 日本語フォント（Regular のみ）
+// 日本語フォント
 registerFont("./fonts/NotoSansJP-Regular.ttf", { family: "NotoSansJP" });
 
 /* --------------------------------------------------
@@ -13,22 +13,17 @@ registerFont("./fonts/NotoSansJP-Regular.ttf", { family: "NotoSansJP" });
 const cache = new Map();
 
 /* --------------------------------------------------
-   PNG を返すエンドポイント
+   PNG を返す
 -------------------------------------------------- */
 app.get("/image/:id", (req, res) => {
-  const id = req.params.id;
-  const buffer = cache.get(id);
-
-  if (!buffer) {
-    return res.status(404).send("Not found");
-  }
-
+  const buffer = cache.get(req.params.id);
+  if (!buffer) return res.status(404).send("Not found");
   res.set("Content-Type", "image/png");
   res.send(buffer);
 });
 
 /* --------------------------------------------------
-   複数字幕 PNG 生成（軽量版）
+   複数字幕 PNG 生成
 -------------------------------------------------- */
 app.post("/multi", async (req, res) => {
   try {
@@ -37,15 +32,12 @@ app.post("/multi", async (req, res) => {
 
     for (const item of items) {
       const pngBuffer = await createSubtitlePng(item.subtitle);
-
       const id = `${Date.now()}-${Math.random()}`;
       cache.set(id, pngBuffer);
 
-      const url = `${req.protocol}://${req.get("host")}/image/${id}`;
-
       results.push({
         id: item.seconds,
-        url
+        url: `${req.protocol}://${req.get("host")}/image/${id}`
       });
     }
 
@@ -58,38 +50,64 @@ app.post("/multi", async (req, res) => {
 });
 
 /* --------------------------------------------------
-   createSubtitlePng（新仕様）
-   - キャンバス幅 1080
-   - テキストブロック幅 540
-   - 下寄せ中央揃え
-   - 最終行が短い場合は前行に吸収
+   createSubtitlePng（最終仕様）
+   - 折り返し基準：6文字（幅540px）
+   - 自然改行：句読点・助詞の後で切る
+   - 4文字以下の行は前行に吸収（最大13文字まで）
+   - テキストブロック中央配置（上下左右）
+   - 行はブロック内で下寄せ
 -------------------------------------------------- */
 async function createSubtitlePng(text) {
-  const canvasWidth = 1080;        // ★ 画面幅と同じ
-  const textBlockWidth = 540;      // ★ 折り返し基準
+  const canvasWidth = 1080;
+  const textBlockWidth = 540;
   const baseFontSize = 64;
   const lineHeightRate = 1.35;
   const maxLines = 7;
 
-  // 仮キャンバスで幅を測る
+  // 仮キャンバス
   let canvas = createCanvas(canvasWidth, 2000);
   let ctx = canvas.getContext("2d");
   ctx.font = `700 ${baseFontSize}px NotoSansJP`;
 
-  // ------------------------------
-  // 1. 通常の折り返し（540px）
-  // ------------------------------
+  /* --------------------------------------------------
+     1. 自然な場所で切る折り返し（6文字基準）
+  -------------------------------------------------- */
   const lines = [];
   let current = "";
+
+  const particles = ["が", "を", "に", "で", "は", "も", "へ", "から", "まで", "より"];
+  const punctuation = ["。", "、"];
 
   for (const char of text) {
     const test = current + char;
     const width = ctx.measureText(test).width;
 
     if (width > textBlockWidth) {
-      lines.push(current);
-      current = char;
+      // デフォルトは6文字基準の位置
+      let cutIndex = current.length;
+
+      // ① 句読点の後で切る
+      for (let i = current.length - 1; i >= 0; i--) {
+        if (punctuation.includes(current[i])) {
+          cutIndex = i + 1;
+          break;
+        }
+      }
+
+      // ② 助詞の後で切る
+      for (let i = current.length - 1; i >= 0; i--) {
+        if (particles.includes(current[i])) {
+          cutIndex = i + 1;
+          break;
+        }
+      }
+
+      // 行を確定
+      lines.push(current.slice(0, cutIndex));
+      current = current.slice(cutIndex) + char;
+
       if (lines.length >= maxLines) break;
+
     } else {
       current = test;
     }
@@ -99,24 +117,36 @@ async function createSubtitlePng(text) {
     lines.push(current);
   }
 
-  // ------------------------------
-  // 2. 最終行が短すぎる場合は前行に吸収
-  // ------------------------------
-  if (lines.length >= 2) {
-    const last = lines[lines.length - 1];
-    if (last.length < 5) {
-      lines[lines.length - 2] += last;
-      lines.pop();
+  /* --------------------------------------------------
+     2. 4文字以下の行は前行に吸収（吸収後13文字以内）
+        安定するまで繰り返す
+  -------------------------------------------------- */
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+
+    for (let i = 1; i < lines.length; i++) {
+      const curr = lines[i];
+      const prev = lines[i - 1];
+
+      if (curr.length <= 4) {
+        if ((prev.length + curr.length) <= 13) {
+          lines[i - 1] = prev + curr;
+          lines.splice(i, 1);
+          changed = true;
+          break;
+        }
+      }
     }
   }
 
-  // ------------------------------
-  // 3. キャンバス高さを行数に合わせて決定
-  // ------------------------------
+  /* --------------------------------------------------
+     3. テキストブロックの高さ
+  -------------------------------------------------- */
   const lineHeight = baseFontSize * lineHeightRate;
   const textHeight = lines.length * lineHeight;
-  const bottomMargin = 120; // 下部余白
-  const canvasHeight = textHeight + bottomMargin;
+  const canvasHeight = textHeight + 400;
 
   canvas = createCanvas(canvasWidth, canvasHeight);
   ctx = canvas.getContext("2d");
@@ -124,19 +154,20 @@ async function createSubtitlePng(text) {
   ctx.textAlign = "center";
   ctx.textBaseline = "top";
 
-  // ------------------------------
-  // 4. 描画開始位置（下寄せ）
-  // ------------------------------
-  let y = canvasHeight - textHeight - bottomMargin + 20;
+  /* --------------------------------------------------
+     4. テキストブロック中央配置
+  -------------------------------------------------- */
+  const blockTop = (canvasHeight - textHeight) / 2;
 
-  // 縁取り（黒）
+  /* --------------------------------------------------
+     5. ブロック内の下寄せ
+  -------------------------------------------------- */
+  let y = blockTop + (textHeight - lines.length * lineHeight);
+
   ctx.lineWidth = baseFontSize * 0.12;
   ctx.strokeStyle = "black";
-
-  // 本文（白）
   ctx.fillStyle = "white";
 
-  // 描画
   for (const line of lines) {
     ctx.strokeText(line, canvasWidth / 2, y);
     ctx.fillText(line, canvasWidth / 2, y);
@@ -153,4 +184,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`Server running on port ${PORT}`);
 });
-
