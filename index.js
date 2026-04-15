@@ -60,7 +60,7 @@ app.post("/multi", async (req, res) => {
 async function createSubtitlePng(text) {
   const canvasWidth = 1080;
   const textBlockWidth = 540;
-  const baseFontSize = 64;
+  const baseFontSize = 56;
   const lineHeightRate = 1.35;
   const maxLines = 7;
 
